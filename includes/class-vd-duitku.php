@@ -22,6 +22,7 @@ class VD_Duitku
     {
         add_action('admin_init', array($this, 'admin_init'));
         add_action('admin_menu', array($this, 'admin_menu'));
+        add_action('admin_enqueue_scripts', array($this, 'admin_enqueue_assets'));
         add_action('rest_api_init', array($this, 'register_rest'));
         add_shortcode('tombol_bayar_duitku', array($this, 'tombol_bayar'));
     }
@@ -41,6 +42,20 @@ class VD_Duitku
             array($this, 'render_settings_page'),
             'dashicons-cart',
             58
+        );
+    }
+
+    public function admin_enqueue_assets($hook_suffix)
+    {
+        if ($hook_suffix !== 'toplevel_page_vd-duitku') {
+            return;
+        }
+
+        wp_enqueue_style(
+            'vd-duitku-admin',
+            VD_DUITKU_PLUGIN_URL . 'assets/admin.css',
+            array(),
+            VD_DUITKU_VERSION
         );
     }
 
@@ -117,6 +132,36 @@ class VD_Duitku
         return $data;
     }
 
+    public function get_dashboard_summary()
+    {
+        $invoice_count = (int) $this->wpdb->get_var("SELECT COUNT(*) FROM {$this->tb_invoice}");
+        $callback_count = (int) $this->wpdb->get_var("SELECT COUNT(*) FROM {$this->tb_callback}");
+        $paid_count = (int) $this->wpdb->get_var($this->wpdb->prepare(
+            "SELECT COUNT(*) FROM {$this->tb_callback} WHERE result_code = %s",
+            '00'
+        ));
+        $last_callback = $this->wpdb->get_row("SELECT * FROM {$this->tb_callback} ORDER BY id DESC LIMIT 1");
+
+        return array(
+            'invoice_count' => $invoice_count,
+            'callback_count' => $callback_count,
+            'paid_count' => $paid_count,
+            'last_callback' => $last_callback,
+        );
+    }
+
+    public function get_recent_invoices($limit = 10)
+    {
+        $limit = max(1, (int) $limit);
+        return $this->wpdb->get_results("SELECT * FROM {$this->tb_invoice} ORDER BY id DESC LIMIT {$limit}");
+    }
+
+    public function get_recent_callbacks($limit = 10)
+    {
+        $limit = max(1, (int) $limit);
+        return $this->wpdb->get_results("SELECT * FROM {$this->tb_callback} ORDER BY id DESC LIMIT {$limit}");
+    }
+
     public function render_settings_page()
     {
         if (!current_user_can('manage_options')) {
@@ -124,43 +169,157 @@ class VD_Duitku
         }
 
         $options = self::options();
+        $summary = $this->get_dashboard_summary();
+        $recent_invoices = $this->get_recent_invoices();
+        $recent_callbacks = $this->get_recent_callbacks();
+        $status_label = self::is_active() ? 'Terkoneksi' : 'Belum lengkap';
+        $status_class = self::is_active() ? 'is-connected' : 'is-pending';
         ?>
-        <div class="wrap">
-            <h1>VD Duitku</h1>
-            <form method="post" action="options.php">
-                <?php settings_fields('vd_duitku_group'); ?>
-                <table class="form-table" role="presentation">
-                    <tbody>
-                        <tr>
-                            <th scope="row"><label for="velocity_duitku_mode">Mode</label></th>
-                            <td>
+        <div class="wrap vd-duitku-admin">
+            <div class="vd-duitku-hero">
+                <div>
+                    <h1>VD Duitku Dashboard</h1>
+                    <p>Monitor invoice, callback, dan konfigurasi merchant dari satu halaman admin.</p>
+                </div>
+                <div class="vd-duitku-status <?php echo esc_attr($status_class); ?>">
+                    <span class="vd-duitku-status__label">Status Plugin</span>
+                    <strong><?php echo esc_html($status_label); ?></strong>
+                </div>
+            </div>
+
+            <div class="vd-duitku-cards">
+                <div class="vd-card">
+                    <span>Total Invoice</span>
+                    <strong><?php echo esc_html(number_format_i18n($summary['invoice_count'])); ?></strong>
+                </div>
+                <div class="vd-card">
+                    <span>Total Callback</span>
+                    <strong><?php echo esc_html(number_format_i18n($summary['callback_count'])); ?></strong>
+                </div>
+                <div class="vd-card">
+                    <span>Callback Sukses</span>
+                    <strong><?php echo esc_html(number_format_i18n($summary['paid_count'])); ?></strong>
+                </div>
+                <div class="vd-card">
+                    <span>Callback Terakhir</span>
+                    <strong><?php echo esc_html($summary['last_callback'] ? $summary['last_callback']->invoice : '-'); ?></strong>
+                </div>
+            </div>
+
+            <div class="vd-duitku-grid">
+                <section class="vd-panel">
+                    <div class="vd-panel__head">
+                        <h2>Konfigurasi Merchant</h2>
+                        <p>Atur koneksi Duitku sandbox atau production.</p>
+                    </div>
+                    <form method="post" action="options.php" class="vd-settings-form">
+                        <?php settings_fields('vd_duitku_group'); ?>
+                        <div class="vd-form-grid">
+                            <label>
+                                <span>Mode</span>
                                 <select id="velocity_duitku_mode" name="velocity_duitku_options[mode]">
                                     <option value="sandbox" <?php selected($options['mode'], 'sandbox'); ?>>Sandbox</option>
                                     <option value="production" <?php selected($options['mode'], 'production'); ?>>Production</option>
                                 </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="velocity_duitku_kode_merchant">Kode Merchant</label></th>
-                            <td><input id="velocity_duitku_kode_merchant" class="regular-text" type="text" name="velocity_duitku_options[kode_merchant]" value="<?php echo esc_attr($options['kode_merchant']); ?>"></td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="velocity_duitku_merchant_key">API Key (Merchant Key)</label></th>
-                            <td><input id="velocity_duitku_merchant_key" class="regular-text" type="text" name="velocity_duitku_options[merchant_key]" value="<?php echo esc_attr($options['merchant_key']); ?>"></td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="velocity_duitku_callback_url">Callback URL</label></th>
-                            <td><input id="velocity_duitku_callback_url" class="regular-text" type="url" name="velocity_duitku_options[callback_url]" value="<?php echo esc_attr($options['callback_url']); ?>"></td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="velocity_duitku_return_url">Return URL</label></th>
-                            <td><input id="velocity_duitku_return_url" class="regular-text" type="url" name="velocity_duitku_options[return_url]" value="<?php echo esc_attr($options['return_url']); ?>"></td>
-                        </tr>
-                    </tbody>
-                </table>
-                <?php submit_button('Simpan Perubahan'); ?>
-            </form>
-            <p>Default callback url: <code><?php echo esc_html(get_site_url() . '/wp-json/vd-duitku/v1/callback'); ?></code></p>
+                            </label>
+                            <label>
+                                <span>Kode Merchant</span>
+                                <input id="velocity_duitku_kode_merchant" type="text" name="velocity_duitku_options[kode_merchant]" value="<?php echo esc_attr($options['kode_merchant']); ?>">
+                            </label>
+                            <label>
+                                <span>API Key (Merchant Key)</span>
+                                <input id="velocity_duitku_merchant_key" type="text" name="velocity_duitku_options[merchant_key]" value="<?php echo esc_attr($options['merchant_key']); ?>">
+                            </label>
+                            <label>
+                                <span>Callback URL</span>
+                                <input id="velocity_duitku_callback_url" type="url" name="velocity_duitku_options[callback_url]" value="<?php echo esc_attr($options['callback_url']); ?>">
+                            </label>
+                            <label class="vd-form-grid__full">
+                                <span>Return URL</span>
+                                <input id="velocity_duitku_return_url" type="url" name="velocity_duitku_options[return_url]" value="<?php echo esc_attr($options['return_url']); ?>">
+                            </label>
+                        </div>
+                        <div class="vd-settings-actions">
+                            <?php submit_button('Simpan Perubahan', 'primary', 'submit', false); ?>
+                            <code><?php echo esc_html(get_site_url() . '/wp-json/vd-duitku/v1/callback'); ?></code>
+                        </div>
+                    </form>
+                </section>
+
+                <section class="vd-panel">
+                    <div class="vd-panel__head">
+                        <h2>Invoice Terbaru</h2>
+                        <p>Data diambil dari tabel invoice plugin.</p>
+                    </div>
+                    <div class="vd-table-wrap">
+                        <table class="widefat striped vd-table">
+                            <thead>
+                                <tr>
+                                    <th>Invoice</th>
+                                    <th>Reference</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($recent_invoices)) : ?>
+                                    <tr><td colspan="5">Belum ada invoice.</td></tr>
+                                <?php else : ?>
+                                    <?php foreach ($recent_invoices as $invoice) : ?>
+                                        <tr>
+                                            <td><?php echo esc_html($invoice->invoice); ?></td>
+                                            <td><?php echo esc_html($invoice->reference); ?></td>
+                                            <td><?php echo esc_html($invoice->amount); ?></td>
+                                            <td><?php echo esc_html($invoice->status_message); ?></td>
+                                            <td><?php echo esc_html($invoice->update_at); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="vd-panel vd-panel--full">
+                    <div class="vd-panel__head">
+                        <h2>Log Callback</h2>
+                        <p>Riwayat callback terbaru dari Duitku.</p>
+                    </div>
+                    <div class="vd-table-wrap">
+                        <table class="widefat striped vd-table">
+                            <thead>
+                                <tr>
+                                    <th>Invoice</th>
+                                    <th>Merchant</th>
+                                    <th>Amount</th>
+                                    <th>Payment Code</th>
+                                    <th>Result</th>
+                                    <th>Reference</th>
+                                    <th>Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($recent_callbacks)) : ?>
+                                    <tr><td colspan="7">Belum ada callback.</td></tr>
+                                <?php else : ?>
+                                    <?php foreach ($recent_callbacks as $callback) : ?>
+                                        <tr>
+                                            <td><?php echo esc_html($callback->invoice); ?></td>
+                                            <td><?php echo esc_html($callback->merchant_code); ?></td>
+                                            <td><?php echo esc_html($callback->amount); ?></td>
+                                            <td><?php echo esc_html($callback->payment_code); ?></td>
+                                            <td><?php echo esc_html($callback->result_code); ?></td>
+                                            <td><?php echo esc_html($callback->reference); ?></td>
+                                            <td><?php echo esc_html($callback->update_at); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
         </div>
         <?php
     }
@@ -393,24 +552,28 @@ class VD_Duitku
         );
     }
 
-    public function callback()
+    public function callback($payload = null)
     {
-        if (!isset($_POST) || (!isset($_POST['merchantCode']) && !isset($_POST['signature']))) {
+        if ($payload === null) {
+            $payload = $_POST;
+        }
+
+        if (!is_array($payload) || (!isset($payload['merchantCode']) && !isset($payload['signature']))) {
             return false;
         }
 
         $apiKey = self::options()['merchant_key'];
-        $merchantCode = isset($_POST['merchantCode']) ? $_POST['merchantCode'] : null;
-        $amount = isset($_POST['amount']) ? $_POST['amount'] : null;
-        $merchantOrderId = isset($_POST['merchantOrderId']) ? $_POST['merchantOrderId'] : null;
-        $signature = isset($_POST['signature']) ? $_POST['signature'] : null;
+        $merchantCode = isset($payload['merchantCode']) ? $payload['merchantCode'] : null;
+        $amount = isset($payload['amount']) ? $payload['amount'] : null;
+        $merchantOrderId = isset($payload['merchantOrderId']) ? $payload['merchantOrderId'] : null;
+        $signature = isset($payload['signature']) ? $payload['signature'] : null;
 
         if (!empty($merchantCode) && !empty($amount) && !empty($merchantOrderId) && !empty($signature)) {
             $calcSignature = md5($merchantCode . $amount . $merchantOrderId . $apiKey);
             if ($signature == $calcSignature) {
-                $this->save_callback($_POST);
-                do_action('velocity_duitku_callback', $_POST);
-                return $_POST;
+                $this->save_callback($payload);
+                do_action('velocity_duitku_callback', $payload);
+                return $payload;
             }
 
             return new WP_Error('missing_params', 'Bad Signature');
@@ -434,6 +597,14 @@ class VD_Duitku
             return new WP_Error('method_not_allowed', 'Metode tidak diizinkan', array('status' => 405));
         }
 
-        return $this->callback();
+        $payload = $request->get_json_params();
+        if (empty($payload)) {
+            $payload = $request->get_body_params();
+        }
+        if (empty($payload)) {
+            $payload = $request->get_params();
+        }
+
+        return $this->callback($payload);
     }
 }
