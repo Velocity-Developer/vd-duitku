@@ -4,15 +4,13 @@ const archiver = require('archiver');
 
 const ROOT = __dirname;
 
-// Ambil versi dari konstanta VD_DUITKU_VERSION di vd-duitku.php
+// Ambil versi dari package.json (sumber kebenaran tunggal)
 function getVersion() {
-  const main = path.join(ROOT, 'vd-duitku.php');
-  const src = fs.readFileSync(main, 'utf8');
-  const match = src.match(/define\(\s*['"]VD_DUITKU_VERSION['"]\s*,\s*['"]([^'"]+)['"]\s*\)/);
-  if (!match) {
-    throw new Error('VD_DUITKU_VERSION tidak ditemukan di vd-duitku.php');
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  if (!pkg.version) {
+    throw new Error('version tidak ditemukan di package.json');
   }
-  return match[1];
+  return pkg.version;
 }
 
 // File/folder runtime yang masuk ke zip (clean build)

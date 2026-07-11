@@ -27,7 +27,7 @@ jobs:
       - name: Read version
         id: ver
         run: |
-          node -e "const fs=require('fs');const s=fs.readFileSync('vd-duitku.php','utf8');const m=s.match(/define\(\s*['\"]VD_DUITKU_VERSION['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)/);if(!m)throw new Error('VD_DUITKU_VERSION not found');process.stdout.write(m[1]);" > version.txt
+          node -p "require('./package.json').version" > version.txt
           echo "version=$(cat version.txt)" >> $GITHUB_OUTPUT
 
       - name: Compare with latest release tag
