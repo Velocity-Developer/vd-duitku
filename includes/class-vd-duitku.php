@@ -43,11 +43,29 @@ class VD_Duitku
             'dashicons-cart',
             58
         );
+
+        add_submenu_page(
+            'vd-duitku',
+            'Konfigurasi Merchant',
+            'Konfigurasi Merchant',
+            'manage_options',
+            'vd-duitku-config',
+            array($this, 'render_config_page')
+        );
+
+        add_submenu_page(
+            'vd-duitku',
+            'Log Callback',
+            'Log Callback',
+            'manage_options',
+            'vd-duitku-log',
+            array($this, 'render_log_page')
+        );
     }
 
     public function admin_enqueue_assets($hook_suffix)
     {
-        if ($hook_suffix !== 'toplevel_page_vd-duitku') {
+        if (!in_array($hook_suffix, array('toplevel_page_vd-duitku', 'vd-duitku_page_vd-duitku-config', 'vd-duitku_page_vd-duitku-log'), true)) {
             return;
         }
 
@@ -162,52 +180,24 @@ class VD_Duitku
         return $this->wpdb->get_results("SELECT * FROM {$this->tb_callback} ORDER BY id DESC LIMIT {$limit}");
     }
 
-    public function render_settings_page()
+    public function render_config_page()
     {
         if (!current_user_can('manage_options')) {
             return;
         }
 
         $options = self::options();
-        $summary = $this->get_dashboard_summary();
-        $recent_invoices = $this->get_recent_invoices();
-        $recent_callbacks = $this->get_recent_callbacks();
-        $status_label = self::is_active() ? 'Terkoneksi' : 'Belum lengkap';
-        $status_class = self::is_active() ? 'is-connected' : 'is-pending';
-        ?>
+?>
         <div class="wrap vd-duitku-admin">
             <div class="vd-duitku-hero">
                 <div>
-                    <h1>VD Duitku Dashboard</h1>
-                    <p>Monitor invoice, callback, dan konfigurasi merchant dari satu halaman admin.</p>
-                </div>
-                <div class="vd-duitku-status <?php echo esc_attr($status_class); ?>">
-                    <span class="vd-duitku-status__label">Status Plugin</span>
-                    <strong><?php echo esc_html($status_label); ?></strong>
-                </div>
-            </div>
-
-            <div class="vd-duitku-cards">
-                <div class="vd-card">
-                    <span>Total Invoice</span>
-                    <strong><?php echo esc_html(number_format_i18n($summary['invoice_count'])); ?></strong>
-                </div>
-                <div class="vd-card">
-                    <span>Total Callback</span>
-                    <strong><?php echo esc_html(number_format_i18n($summary['callback_count'])); ?></strong>
-                </div>
-                <div class="vd-card">
-                    <span>Callback Sukses</span>
-                    <strong><?php echo esc_html(number_format_i18n($summary['paid_count'])); ?></strong>
-                </div>
-                <div class="vd-card">
-                    <span>Callback Terakhir</span>
-                    <strong><?php echo esc_html($summary['last_callback'] ? $summary['last_callback']->invoice : '-'); ?></strong>
+                    <h1>Konfigurasi Merchant</h1>
+                    <p>Atur koneksi Duitku sandbox atau production.</p>
                 </div>
             </div>
 
             <div class="vd-duitku-grid">
-                <section class="vd-panel">
+                <section class="vd-panel vd-panel--full">
                     <div class="vd-panel__head">
                         <h2>Konfigurasi Merchant</h2>
                         <p>Atur koneksi Duitku sandbox atau production.</p>
@@ -245,42 +235,28 @@ class VD_Duitku
                         </div>
                     </form>
                 </section>
+            </div>
+        </div>
+    <?php
+    }
 
-                <section class="vd-panel">
-                    <div class="vd-panel__head">
-                        <h2>Invoice Terbaru</h2>
-                        <p>Data diambil dari tabel invoice plugin.</p>
-                    </div>
-                    <div class="vd-table-wrap">
-                        <table class="widefat striped vd-table">
-                            <thead>
-                                <tr>
-                                    <th>Invoice</th>
-                                    <th>Reference</th>
-                                    <th>Amount</th>
-                                    <th>Status</th>
-                                    <th>Updated</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (empty($recent_invoices)) : ?>
-                                    <tr><td colspan="5">Belum ada invoice.</td></tr>
-                                <?php else : ?>
-                                    <?php foreach ($recent_invoices as $invoice) : ?>
-                                        <tr>
-                                            <td><?php echo esc_html($invoice->invoice); ?></td>
-                                            <td><?php echo esc_html($invoice->reference); ?></td>
-                                            <td><?php echo esc_html($invoice->amount); ?></td>
-                                            <td><?php echo esc_html($invoice->status_message); ?></td>
-                                            <td><?php echo esc_html($invoice->update_at); ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
+    public function render_log_page()
+    {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
 
+        $recent_callbacks = $this->get_recent_callbacks();
+    ?>
+        <div class="wrap vd-duitku-admin">
+            <div class="vd-duitku-hero">
+                <div>
+                    <h1>Log Callback</h1>
+                    <p>Riwayat callback terbaru dari Duitku.</p>
+                </div>
+            </div>
+
+            <div class="vd-duitku-grid">
                 <section class="vd-panel vd-panel--full">
                     <div class="vd-panel__head">
                         <h2>Log Callback</h2>
@@ -301,7 +277,9 @@ class VD_Duitku
                             </thead>
                             <tbody>
                                 <?php if (empty($recent_callbacks)) : ?>
-                                    <tr><td colspan="7">Belum ada callback.</td></tr>
+                                    <tr>
+                                        <td colspan="7">Belum ada callback.</td>
+                                    </tr>
                                 <?php else : ?>
                                     <?php foreach ($recent_callbacks as $callback) : ?>
                                         <tr>
@@ -321,7 +299,91 @@ class VD_Duitku
                 </section>
             </div>
         </div>
-        <?php
+    <?php
+    }
+
+    public function render_settings_page()
+    {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+
+        $summary = $this->get_dashboard_summary();
+        $recent_invoices = $this->get_recent_invoices();
+        $status_label = self::is_active() ? 'Terkoneksi' : 'Belum lengkap';
+        $status_class = self::is_active() ? 'is-connected' : 'is-pending';
+    ?>
+        <div class="wrap vd-duitku-admin">
+            <div class="vd-duitku-hero">
+                <div>
+                    <h1>VD Duitku Dashboard</h1>
+                    <p>Monitor invoice dan callback dari satu halaman admin.</p>
+                </div>
+                <div class="vd-duitku-status <?php echo esc_attr($status_class); ?>">
+                    <span class="vd-duitku-status__label">Status Plugin</span>
+                    <strong><?php echo esc_html($status_label); ?></strong>
+                </div>
+            </div>
+
+            <div class="vd-duitku-cards">
+                <div class="vd-card">
+                    <span>Total Invoice</span>
+                    <strong><?php echo esc_html(number_format_i18n($summary['invoice_count'])); ?></strong>
+                </div>
+                <div class="vd-card">
+                    <span>Total Callback</span>
+                    <strong><?php echo esc_html(number_format_i18n($summary['callback_count'])); ?></strong>
+                </div>
+                <div class="vd-card">
+                    <span>Callback Sukses</span>
+                    <strong><?php echo esc_html(number_format_i18n($summary['paid_count'])); ?></strong>
+                </div>
+                <div class="vd-card">
+                    <span>Callback Terakhir</span>
+                    <strong><?php echo esc_html($summary['last_callback'] ? $summary['last_callback']->invoice : '-'); ?></strong>
+                </div>
+            </div>
+
+            <div class="vd-duitku-grid">
+                <section class="vd-panel vd-panel--full">
+                    <div class="vd-panel__head">
+                        <h2>Invoice Terbaru</h2>
+                        <p>Data diambil dari tabel invoice plugin.</p>
+                    </div>
+                    <div class="vd-table-wrap">
+                        <table class="widefat striped vd-table">
+                            <thead>
+                                <tr>
+                                    <th>Invoice</th>
+                                    <th>Reference</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($recent_invoices)) : ?>
+                                    <tr>
+                                        <td colspan="5">Belum ada invoice.</td>
+                                    </tr>
+                                <?php else : ?>
+                                    <?php foreach ($recent_invoices as $invoice) : ?>
+                                        <tr>
+                                            <td><?php echo esc_html($invoice->invoice); ?></td>
+                                            <td><?php echo esc_html($invoice->reference); ?></td>
+                                            <td><?php echo esc_html($invoice->amount); ?></td>
+                                            <td><?php echo esc_html($invoice->status_message); ?></td>
+                                            <td><?php echo esc_html($invoice->update_at); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </div>
+    <?php
     }
 
     public static function is_active()
@@ -481,7 +543,7 @@ class VD_Duitku
         $amount = $cek_invoice->amount;
         $mode = self::options()['mode'];
         $js = $mode == 'sandbox' ? 'https://app-sandbox.duitku.com/lib/js/duitku.js' : 'https://app-prod.duitku.com/lib/js/duitku.js';
-        ?>
+    ?>
         <button id="bayarduitku<?php echo esc_attr($invoice); ?>" class="<?php echo esc_attr($atribut['class']); ?>">
             Bayar Sekarang <?php echo esc_html($amount); ?>
         </button>
@@ -506,7 +568,7 @@ class VD_Duitku
                 });
             });
         </script>
-        <?php
+<?php
 
         return ob_get_clean();
     }

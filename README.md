@@ -72,6 +72,14 @@ composer test
 
 Jika test suite WordPress belum ada, `tests/bootstrap.php` akan berhenti dan memberi pesan error.
 
+## Build distribusi
+```bash
+npm install
+npm run build
+# hasil: dist/vd-duitku-<version>.zip
+```
+Versi pada nama zip diambil otomatis dari konstanta `VD_DUITKU_VERSION` di `vd-duitku.php`. Zip hanya berisi file runtime plugin (tanpa `tests/`, `vendor/`, `node_modules/`, `.trae/`, dan config dev).
+
 ## Catatan
 - Callback memvalidasi signature MD5 dari `merchantCode + amount + merchantOrderId + merchant_key`.
 - File uninstall saat ini belum menghapus tabel atau option plugin.
