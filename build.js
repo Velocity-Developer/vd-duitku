@@ -3,17 +3,21 @@ const path = require('path');
 const archiver = require('archiver');
 
 const ROOT = __dirname;
+const PLUGIN_DIR = 'vd-duitku';
 
-// Ambil versi dari package.json (sumber kebenaran tunggal)
+// Ambil versi dari package.json
 function getVersion() {
-  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  const pkgPath = path.join(ROOT, 'package.json');
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+
   if (!pkg.version) {
     throw new Error('version tidak ditemukan di package.json');
   }
+
   return pkg.version;
 }
 
-// File/folder runtime yang masuk ke zip (clean build)
+// File/folder runtime yang masuk ke ZIP
 const ENTRIES = [
   'vd-duitku.php',
   'includes',
@@ -22,23 +26,45 @@ const ENTRIES = [
   'README.md',
 ];
 
-function main() {
+async function main() {
   const version = getVersion();
+
   const distDir = path.join(ROOT, 'dist');
+
+  // Buat folder dist jika belum ada
   fs.mkdirSync(distDir, { recursive: true });
 
   const zipName = `vd-duitku-${version}.zip`;
   const zipPath = path.join(distDir, zipName);
+
+  // Hapus ZIP lama jika sudah ada
+  if (fs.existsSync(zipPath)) {
+    fs.unlinkSync(zipPath);
+  }
+
   const output = fs.createWriteStream(zipPath);
-  const archive = archiver('zip', { zlib: { level: 9 } });
+
+  const archive = archiver('zip', {
+    zlib: {
+      level: 9,
+    },
+  });
 
   output.on('close', () => {
-    console.log(`Build selesai: ${zipPath} (${archive.pointer()} bytes)`);
+    console.log('');
+    console.log('Build selesai.');
+    console.log(`File   : ${zipPath}`);
+    console.log(`Ukuran : ${archive.pointer()} bytes`);
+    console.log(`Root   : ${PLUGIN_DIR}/`);
+  });
+
+  output.on('error', (err) => {
+    throw err;
   });
 
   archive.on('warning', (err) => {
     if (err.code === 'ENOENT') {
-      console.warn(err);
+      console.warn(err.message);
     } else {
       throw err;
     }
@@ -51,20 +77,36 @@ function main() {
   archive.pipe(output);
 
   for (const entry of ENTRIES) {
-    const full = path.join(ROOT, entry);
-    if (!fs.existsSync(full)) {
+    const fullPath = path.join(ROOT, entry);
+
+    if (!fs.existsSync(fullPath)) {
       console.warn(`Lewati (tidak ada): ${entry}`);
       continue;
     }
-    const stat = fs.statSync(full);
+
+    const stat = fs.statSync(fullPath);
+
     if (stat.isDirectory()) {
-      archive.directory(full, entry);
+      // Contoh:
+      // includes -> vd-duitku/includes
+      archive.directory(
+        fullPath,
+        `${PLUGIN_DIR}/${entry}`
+      );
     } else {
-      archive.file(full, { name: entry });
+      // Contoh:
+      // vd-duitku.php -> vd-duitku/vd-duitku.php
+      archive.file(fullPath, {
+        name: `${PLUGIN_DIR}/${entry}`,
+      });
     }
   }
 
-  archive.finalize();
+  await archive.finalize();
 }
 
-main();
+main().catch((err) => {
+  console.error('Build gagal:');
+  console.error(err);
+  process.exit(1);
+});
